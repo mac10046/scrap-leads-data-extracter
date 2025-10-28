@@ -105,7 +105,6 @@ MIT
 
 ## ☕ Support / Donate
 
-This theme cost me **₹16,000 INR** to get designed, refined, and polished.  
 If you find it useful (or just want to support an indie creator grinding in Mumbai):
 
 ❤️ Buy Me a Coffee → https://www.buymeacoffee.com/abdeali.c
@@ -125,13 +124,12 @@ Fork → Improve → Contribute → High-five! 🙌
 
 ## 📬 Feedback & Contact
 
-For customizations or full website development for financial firms:
+For customizations or development for custom usage - like scrap google map for related connect you want, get there webistes and extract:
 🌍 https://softlancersolutions.com
 
 ---
 
 ### ⭐ Pro Tip
 
-If you like this theme, **star the repository** on GitHub so it reaches more awesome devs like you 🌟
+If you like this code / web scrapper, **star the repository** on GitHub so it reaches more awesome devs like you 🌟
 
-Let’s make the finance world look fabulous!
