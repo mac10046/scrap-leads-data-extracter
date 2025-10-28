@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+playwright
+beautifulsoup4
+tldextract
+phonenumbers
+regex
+aiofiles
+pydantic

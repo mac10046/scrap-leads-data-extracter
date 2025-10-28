@@ -1,0 +1,84 @@
+{
+  "info": {
+    "name": "Job Crawler Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": { "major": 1, "minor": 0, "patch": 0 }
+  },
+  "item": [
+    {
+      "name": "Create Job",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n \"sites\": [\n \"https://softlancersolutions.com\"\n ],\n \"max_pages\": 50,\n \"concurrency\": 2,\n \"delay\": 1.0,\n \"headless\": false,\n \"default_region\": \"IN\",\n \"job_name\": \"softlancer-batch\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5599/jobs",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5599",
+          "path": ["jobs"]
+        }
+      }
+    },
+    {
+      "name": "Get Job Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5599/jobs/{{job_id}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5599",
+          "path": ["jobs", "{{job_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Get Result JSON",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5599/result/json/{{job_id}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5599",
+          "path": ["result", "json", "{{job_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Get Result CSV",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5599/result/csv/{{job_id}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5599",
+          "path": ["result", "csv", "{{job_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5599/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5599",
+          "path": ["health"]
+        }
+      }
+    }
+  ],
+  "variable": [{ "key": "job_id", "value": "" }]
+}
