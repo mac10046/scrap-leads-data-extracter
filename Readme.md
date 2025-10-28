@@ -100,3 +100,38 @@ Response: `{ "job_id": "<uuid>", "status": "scheduled" }`
 
 ## License
 MIT
+
+---
+
+## ☕ Support / Donate
+
+This theme cost me **₹16,000 INR** to get designed, refined, and polished.  
+If you find it useful (or just want to support an indie creator grinding in Mumbai):
+
+❤️ Buy Me a Coffee → https://www.buymeacoffee.com/abdeali.c
+
+Every coffee keeps the creativity brewing.
+
+---
+
+## 🤝 Contributing
+
+Got ideas? Found a bug? Want to add a new feature?  
+Pull Requests are open and welcome!
+
+Fork → Improve → Contribute → High-five! 🙌
+
+---
+
+## 📬 Feedback & Contact
+
+For customizations or full website development for financial firms:
+🌍 https://softlancersolutions.com
+
+---
+
+### ⭐ Pro Tip
+
+If you like this theme, **star the repository** on GitHub so it reaches more awesome devs like you 🌟
+
+Let’s make the finance world look fabulous!
