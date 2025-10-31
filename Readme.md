@@ -91,3 +91,35 @@ Open `http://localhost:5599/docs` for the automatic Swagger UI.
 
 ## API reference (quick)
 MIT
+---
+
+## ☕ Support / Donate
+
+If you find it useful (or just want to support an indie creator grinding in Mumbai):
+
+❤️ Buy Me a Coffee → https://www.buymeacoffee.com/abdeali.c
+
+Every coffee keeps the creativity brewing.
+
+---
+
+## 🤝 Contributing
+
+Got ideas? Found a bug? Want to add a new feature?  
+Pull Requests are open and welcome!
+
+Fork → Improve → Contribute → High-five! 🙌
+
+---
+
+## 📬 Feedback & Contact
+
+For customizations or development for custom usage - like scrap google map for related connect you want, get there webistes and extract:
+🌍 https://softlancersolutions.com
+
+---
+
+### ⭐ Pro Tip
+
+If you like this code / web scrapper, **star the repository** on GitHub so it reaches more awesome devs like you 🌟
+
