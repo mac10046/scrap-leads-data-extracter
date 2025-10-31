@@ -2,11 +2,11 @@
   "info": {
     "name": "Job Crawler Service",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "version": { "major": 1, "minor": 0, "patch": 0 }
+    "version": { "major": 1, "minor": 1, "patch": 0 }
   },
   "item": [
     {
-      "name": "Create Job",
+      "name": "Create Site-list Job",
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -20,6 +20,32 @@
           "host": ["localhost"],
           "port": "5599",
           "path": ["jobs"]
+        }
+      }
+    },
+    {
+      "name": "Create CSV Job (upload)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "csv_file", "type": "file", "src": "path/to/your.csv" },
+            { "key": "website_column", "value": "website", "type": "text" },
+            { "key": "max_pages", "value": "10", "type": "text" },
+            { "key": "concurrency", "value": "2", "type": "text" },
+            { "key": "delay", "value": "0.5", "type": "text" },
+            { "key": "headless", "value": "false", "type": "text" },
+            { "key": "default_region", "value": "IN", "type": "text" }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:5599/jobs/csv",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5599",
+          "path": ["jobs", "csv"]
         }
       }
     },

@@ -7,10 +7,11 @@ Run:
 or:
     uvicorn job_crawler_service:app --host 0.0.0.0 --port 5599
 
-This script will start the FastAPI app on port 5599 by default when run directly.
+New:
+- POST /jobs/csv  -> upload CSV file and crawl websites listed in a column
 """
-
 import asyncio
+import csv
 import json
 import os
 import re
@@ -19,14 +20,14 @@ import sys
 import time
 import uuid
 from collections import defaultdict
-from typing import List, Optional
+from typing import List, Optional, Tuple, Dict, Any
 
 import tldextract
 from bs4 import BeautifulSoup
 import phonenumbers
 import regex as re2
 
-from fastapi import FastAPI, HTTPException, Path
+from fastapi import FastAPI, HTTPException, Path, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field
 from urllib.parse import urljoin, urlparse
@@ -57,11 +58,14 @@ SOCIAL_HOSTS = {
     'tiktok': ('tiktok.com',),
 }
 
+# Possible header names to auto-detect url column
+WEBSITE_CANDIDATES = ['website', 'url', 'site', 'domain', 'website_url', 'site_url']
+
 # ---------- FastAPI app ----------
 app = FastAPI(title="Email/Contact Crawler Job Service")
 
 # In-memory job store (demo). For persistence, use DB.
-JOBS = {}  # job_id -> metadata
+JOBS: Dict[str, Dict[str, Any]] = {}  # job_id -> metadata
 
 # ---------- Pydantic models ----------
 class JobRequest(BaseModel):
@@ -399,7 +403,7 @@ class AsyncSiteCrawler:
             'pages_crawled': self.results['pages_crawled']
         }
 
-# ---------- Job orchestration ----------
+# ---------- Job orchestration (site-list jobs) ----------
 async def run_job_worker(job_id: str):
     meta = JOBS.get(job_id)
     if not meta:
@@ -494,6 +498,171 @@ async def run_job_worker(job_id: str):
         JOBS[job_id]['error'] = str(e)
         JOBS[job_id]['finished_at'] = time.time()
 
+# ---------- CSV job runner ----------
+async def run_csv_job(job_id: str):
+    """
+    Read uploaded CSV, detect website column (or use provided), crawl each site,
+    and write enriched CSV (result_enriched.csv) and result.json in job_dir.
+    """
+    meta = JOBS.get(job_id)
+    if not meta:
+        return
+    JOBS[job_id]['status'] = 'running'
+    JOBS[job_id]['started_at'] = time.time()
+    params = meta['params']
+
+    job_dir = os.path.join(STORAGE_DIR, job_id)
+    # DO NOT delete job_dir here — uploaded CSV was saved by create_job_from_csv into this dir.
+    os.makedirs(job_dir, exist_ok=True)
+
+    uploaded_csv_path = params.get('uploaded_csv_path')
+    if not uploaded_csv_path or not os.path.exists(uploaded_csv_path):
+        JOBS[job_id]['status'] = 'failed'
+        JOBS[job_id]['error'] = 'uploaded CSV missing'
+        return
+
+    # Read CSV
+    rows: List[Dict[str, str]] = []
+    with open(uploaded_csv_path, newline='', encoding='utf-8') as csvfile:
+        reader = csv.DictReader(csvfile)
+        headers = reader.fieldnames or []
+        for r in reader:
+            rows.append(r)
+
+    if not headers:
+        JOBS[job_id]['status'] = 'failed'
+        JOBS[job_id]['error'] = 'CSV has no header'
+        return
+
+    # Determine website column
+    website_column = params.get('website_column')
+    if website_column and website_column not in headers:
+        # try case-insensitive match
+        matches = [h for h in headers if h.lower() == website_column.lower()]
+        website_column = matches[0] if matches else None
+
+    if not website_column:
+        # auto-detect
+        found = next((h for h in headers if h.lower() in WEBSITE_CANDIDATES), None)
+        if found:
+            website_column = found
+
+    if not website_column:
+        JOBS[job_id]['status'] = 'failed'
+        JOBS[job_id]['error'] = f"Could not detect website column. Headers: {headers}"
+        return
+
+    # Prepare results per row
+    enriched_rows: List[Dict[str, Any]] = []
+    aggregated = {
+        'emails': set(),
+        'phones': set(),
+        'socials': defaultdict(set),
+        'contact_pages': set(),
+        'per_row': []
+    }
+
+    # Crawl each site sequentially (keeps resource usage bounded)
+    for idx, row in enumerate(rows):
+        site_raw = row.get(website_column, '') or ''
+        site = site_raw.strip()
+        if not site:
+            enriched_rows.append({**row,
+                                  'extracted_emails': '',
+                                  'extracted_phones': '',
+                                  'extracted_socials': '',
+                                  'extracted_contact_pages': ''})
+            aggregated['per_row'].append({
+                'row_index': idx, 'site': site, 'emails': [], 'phones': [], 'socials': {}, 'contact_pages': []
+            })
+            continue
+
+        if not site.startswith('http'):
+            site = 'https://' + site
+
+        JOBS[job_id]['current_site'] = site
+        crawler = AsyncSiteCrawler(
+            start_url=site,
+            max_pages=params.get('max_pages', 10),
+            concurrency=params.get('concurrency', 2),
+            delay=params.get('delay', 0.5),
+            headless=params.get('headless', True),
+            default_region=params.get('default_region', None)
+        )
+        try:
+            site_out = await crawler.run()
+        except Exception as e:
+            site_out = {
+                'emails': [],
+                'phones': [],
+                'socials': {},
+                'contact_pages': [],
+                'pages_crawled': 0,
+                'error': str(e)
+            }
+
+        # Merge aggregated
+        for e in site_out.get('emails', []):
+            aggregated['emails'].add(e)
+        for p in site_out.get('phones', []):
+            aggregated['phones'].add(p)
+        for platform, links in site_out.get('socials', {}).items():
+            for l in links:
+                aggregated['socials'][platform].add(l)
+        for cp in site_out.get('contact_pages', []):
+            aggregated['contact_pages'].add(cp)
+
+        aggregated['per_row'].append({
+            'row_index': idx,
+            'site': site,
+            'emails': site_out.get('emails', []),
+            'phones': site_out.get('phones', []),
+            'socials': site_out.get('socials', {}),
+            'contact_pages': site_out.get('contact_pages', [])
+        })
+
+        enriched_rows.append({
+            **row,
+            'extracted_emails': ';'.join(site_out.get('emails', [])),
+            'extracted_phones': ';'.join(site_out.get('phones', [])),
+            'extracted_socials': json.dumps(site_out.get('socials', {}), ensure_ascii=False),
+            'extracted_contact_pages': ';'.join(site_out.get('contact_pages', []))
+        })
+
+    # Write enriched CSV
+    enriched_csv_path = os.path.join(job_dir, 'result_enriched.csv')
+    out_headers = list(headers) + ['extracted_emails', 'extracted_phones', 'extracted_socials', 'extracted_contact_pages']
+    with open(enriched_csv_path, 'w', newline='', encoding='utf-8') as outf:
+        writer = csv.DictWriter(outf, fieldnames=out_headers)
+        writer.writeheader()
+        for r in enriched_rows:
+            out_row = {k: r.get(k, '') for k in out_headers}
+            writer.writerow(out_row)
+
+    # Write aggregated JSON result
+    final = {
+        'job_id': job_id,
+        'params': params,
+        'started_at': JOBS[job_id].get('started_at'),
+        'finished_at': time.time(),
+        'aggregated': {
+            'emails': sorted(list(aggregated['emails'])),
+            'phones': sorted(list(aggregated['phones'])),
+            'socials': {k: sorted(list(v)) for k, v in aggregated['socials'].items()},
+            'contact_pages': sorted(list(aggregated['contact_pages'])),
+            'per_row': aggregated['per_row']
+        }
+    }
+
+    json_path = os.path.join(job_dir, 'result.json')
+    with open(json_path, 'w', encoding='utf-8') as jf:
+        json.dump(final, jf, indent=2, ensure_ascii=False)
+
+    # update job metadata
+    JOBS[job_id]['status'] = 'done'
+    JOBS[job_id]['finished_at'] = time.time()
+    JOBS[job_id]['result_files'] = {'json': json_path, 'csv': enriched_csv_path}
+
 # ---------- API endpoints ----------
 @app.post("/jobs", status_code=202)
 async def create_job(req: JobRequest):
@@ -525,6 +694,50 @@ async def create_job(req: JobRequest):
     }
 
     asyncio.create_task(run_job_worker(job_id))
+    return {"job_id": job_id, "status": "scheduled"}
+
+@app.post("/jobs/csv", status_code=202)
+async def create_job_from_csv(
+    csv_file: UploadFile = File(...),
+    website_column: Optional[str] = Form(None),
+    max_pages: int = Form(10),
+    concurrency: int = Form(2),
+    delay: float = Form(0.5),
+    headless: bool = Form(True),
+    default_region: Optional[str] = Form(None),
+    job_name: Optional[str] = Form(None)
+):
+    """
+    Upload a CSV containing a column of website URLs. The API will schedule a job that
+    crawls each website and appends extracted contact info into the CSV.
+    """
+    # Save uploaded file to a temporary job folder first
+    job_id = str(uuid.uuid4())
+    job_dir = os.path.join(STORAGE_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    uploaded_path = os.path.join(job_dir, 'uploaded.csv')
+    # write uploaded file to disk
+    with open(uploaded_path, 'wb') as f:
+        content = await csv_file.read()
+        f.write(content)
+
+    JOBS[job_id] = {
+        'status': 'pending',
+        'created_at': time.time(),
+        'params': {
+            'uploaded_csv_path': uploaded_path,
+            'website_column': website_column,
+            'max_pages': max_pages,
+            'concurrency': concurrency,
+            'delay': delay,
+            'headless': headless,
+            'default_region': default_region,
+            'job_name': job_name
+        },
+        'result_files': None
+    }
+
+    asyncio.create_task(run_csv_job(job_id))
     return {"job_id": job_id, "status": "scheduled"}
 
 @app.get("/jobs/{job_id}")
@@ -588,7 +801,6 @@ signal.signal(signal.SIGTERM, _on_shutdown)
 
 # ---------- Entrypoint: start uvicorn when run directly ----------
 if __name__ == "__main__":
-    # prefer uvicorn CLI but fall back to programmatic start for convenience
     try:
         import uvicorn
     except Exception:
@@ -596,5 +808,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print("Starting job_crawler_service on port 5599 ...")
-    # Adjust log_level as needed
     uvicorn.run(app, host="0.0.0.0", port=5599, log_level="info")

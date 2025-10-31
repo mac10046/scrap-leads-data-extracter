@@ -7,3 +7,5 @@ phonenumbers
 regex
 aiofiles
 pydantic
+python-multipart
+requests
